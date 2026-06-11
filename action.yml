@@ -1,0 +1,33 @@
+name: "Docs Selfheal"
+description: "Detects documentation made stale by code changes and proposes targeted fixes."
+inputs:
+  docs-dir:
+    description: "Directory containing markdown docs"
+    required: false
+    default: "docs"
+  base-ref:
+    description: "Base ref to compare against"
+    required: false
+    default: "origin/main"
+runs:
+  using: "composite"
+  steps:
+    - name: Snapshot base and head
+      shell: bash
+      run: |
+        git worktree add /tmp/base ${{ inputs.base-ref }}
+    - name: Install
+      shell: bash
+      run: pip install .
+    - name: Check docs staleness
+      shell: bash
+      run: |
+        docheal check --old /tmp/base --new . --docs ${{ inputs.docs-dir }} \
+          --out corrections.json | tee doc-check-summary.md
+    - name: Comment on PR
+      if: always()
+      shell: bash
+      run: |
+        if [ -n "$GITHUB_TOKEN" ] && [ -f doc-check-summary.md ]; then
+          gh pr comment ${{ github.event.pull_request.number }} --body-file doc-check-summary.md || true
+        fi
